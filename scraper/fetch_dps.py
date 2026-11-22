@@ -11,56 +11,34 @@ from bs4 import BeautifulSoup
 SUPABASE_URL = "https://mobpdvfwfwpxbxehlumm.supabase.co"
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
 
-# 28 открытых ДПС-каналов и дорожных сводок Москвы и Подмосковья (без сессий и авторизации)
+# Реально существующие открытые каналы Москвы и Подмосковья
 PUBLIC_CHANNELS = [
-    # Общие по Москве и МКАД
     "moscow_dps",
-    "dps_msk",
-    "gibdd_msk",
-    "gai_msk",
-    "dps_moscow_mo",
-    "dps_mkad",
     "dtp777",
     "moscowmap",
-    # Округа Москвы
-    "dps_uao",
-    "dps_uzao",
-    "dps_zao",
-    "dps_szao",
-    "dps_sao",
-    "dps_svao",
-    "dps_vao",
-    "dps_uvao",
-    # Подмосковье и вылетные трассы
-    "dps_mo",
-    "dps_podmoskovye",
-    "dps_khimki",
-    "dps_mytishchi",
-    "dps_balashikha",
-    "dps_lyubertsy",
-    "dps_podolsk",
-    "dps_odintsovo",
-    "dps_krasnogorsk",
-    "dps_domodedovo",
-    "dps_zelenograd",
-    "dps_pushkino",
+    "mosoblast",
+    "podmoskovye",
+    "msk_live",
+    "moscowach",
+    "transportmos",
+    "DtRoad",
+    "msk1_news",
 ]
 
-# Только реальные сообщения про экипажи, рейды и посты
+# Строго слова про посты и экипажи ДПС
 KEYWORDS = [
-    "дпс", "гибдд", "гаи", "экипаж", "пост", "стоят", "тормозят",
+    "дпс", "гибдд", "гаи", "экипаж", "пост ", "посты", "стоят", "тормозят",
     "рейд", "засада", "патруль", "нюхачи", "продувка", "трезвый водитель",
-    "оформляют", "люстра", "мигалки", "машинка", "работают", "перекрыли"
+    "оформляют", "люстра", "мигалки", "машинка", "инспектор", "перекрыли"
 ]
 
-# Фильтр от рекламы и длинных новостей
+# Отсекаем новостной и рекламный спам
 STOP_WORDS = [
     "подписаться", "прислать новость", "реклама", "erid", "прогноз погоды",
     "задержали мошенников", "суд приговорил", "строительство метро",
-    "продам", "куплю", "вакансия", "требуются", "розыгрыш"
+    "продам", "куплю", "вакансия", "требуются", "розыгрыш", "тариф", "метрополитен"
 ]
 
-# Привязка к конкретным шоссе, округам и городам МО (если в тексте нет номера дома/улицы)
 HIGHWAYS_AND_CITIES = {
     "ленинградк": (55.8549, 37.4765),
     "ленинградское шоссе": (55.8549, 37.4765),
@@ -180,7 +158,7 @@ def geocode_address(text):
     if loc_phrase:
         query = urllib.parse.quote(f"Москва и Московская область, {loc_phrase}")
         url = f"https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1&viewbox=35.1,56.9,40.2,54.2&bounded=1"
-        req = urllib.request.Request(url, headers={"User-Agent": "DpsMskRadarBot/2.1"})
+        req = urllib.request.Request(url, headers={"User-Agent": "DpsMskRadarBot/2.2"})
         try:
             with urllib.request.urlopen(req, timeout=8) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
@@ -237,14 +215,12 @@ def fetch_public_channels():
         try:
             with urllib.request.urlopen(req, timeout=12) as resp:
                 html = resp.read().decode("utf-8", errors="ignore")
-        except Exception:
+        except Exception as e:
+            print(f"Канал @{channel} недоступен: {e}")
             continue
 
         soup = BeautifulSoup(html, "html.parser")
         messages = soup.find_all("div", class_="tgme_widget_message")
-        if not messages:
-            continue
-
         print(f"Канал @{channel}: сообщений = {len(messages)}")
 
         for msg in messages[-25:]:
@@ -259,7 +235,7 @@ def fetch_public_channels():
             if dt_str:
                 try:
                     msg_dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-                    if (now - msg_dt) > timedelta(hours=6):
+                    if (now - msg_dt) > timedelta(hours=12):
                         continue
                 except Exception:
                     pass
@@ -267,7 +243,7 @@ def fetch_public_channels():
             text = text_div.get_text(" ", strip=True)
             lower_text = text.lower()
 
-            if len(text) > 350 or any(sw in lower_text for sw in STOP_WORDS):
+            if len(text) > 400 or any(sw in lower_text for sw in STOP_WORDS):
                 continue
 
             if not any(kw in lower_text for kw in KEYWORDS):
