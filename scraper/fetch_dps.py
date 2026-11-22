@@ -37,7 +37,7 @@ DPS_REGEX = re.compile(
 )
 
 STOP_WORDS = [
-    "реклама", "erid", "продам", "куплю", "вакансия", "требуются", "розыгрыш", "подписаться"
+    "реклама", "erid", "продам", "куплю", "вакансия", "требуются", "розыгрыш", "подписаться", "маломерн", "на воде"
 ]
 
 HIGHWAYS_AND_CITIES = {
@@ -258,7 +258,16 @@ async def fetch_live_chats():
         return
 
     now = datetime.now(timezone.utc)
-    async with TelegramClient(StringSession(TG_SESSION), int(TG_API_ID), TG_API_HASH) as client:
+    async with TelegramClient(
+        StringSession(TG_SESSION),
+        int(TG_API_ID),
+        TG_API_HASH,
+        device_model="Desktop",
+        system_version="Windows 10",
+        app_version="5.8.3",
+        lang_code="ru",
+        system_lang_code="ru-RU",
+    ) as client:
         async for dialog in client.iter_dialogs():
             if not (dialog.is_group or dialog.is_channel):
                 continue
