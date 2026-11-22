@@ -20,8 +20,6 @@ CHANNELS = [
     "moscowach",
     "mosoblast",
     "podmoskovye",
-    "gibdd_mo",
-    "avtodormsk",
     "msk_live",
 ]
 
@@ -130,7 +128,6 @@ def send_to_supabase(lat, lng, comment, source_id):
 
     headers = {
         "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
         "Content-Type": "application/json",
         "Prefer": "resolution=ignore-duplicates",
     }
