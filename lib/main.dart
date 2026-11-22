@@ -1,10 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const String supabaseUrl = 'https://mobpdvfwfwpxbxehlumm.supabase.co';
-const String supabaseAnonKey = 'sb_publishable_Ru7JMBz4-GVNCyjiTrDrwQ_kkACosiz';
+const String supabaseAnonKey =
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1vYnBkdmZ3ZndweGJ4ZWhsdW1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUzNTQ3OTksImV4cCI6MjExMDkzMDc5OX0.lakkyjDl2aA9pfu3f8_VX5oFfGlnGs3is5cOkrB9hjM';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,15 +47,42 @@ class _MapScreenState extends State<MapScreen> {
     const LatLng(56.9, 40.2),
   );
 
-  late final SupabaseStreamBuilder _marksStream;
+  List _marks = [];
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
-    _marksStream = _supabase
-        .from('patrol_marks')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: false);
+    _loadMarks();
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _loadMarks(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadMarks() async {
+    try {
+      final since = DateTime.now()
+          .toUtc()
+          .subtract(const Duration(hours: 24))
+          .toIso8601String();
+      final data = await _supabase
+          .from('patrol_marks')
+          .select()
+          .gte('created_at', since)
+          .order('created_at', ascending: false);
+      if (mounted) {
+        setState(() {
+          _marks = data as List;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _sendMarkToCloud(LatLng point, String comment) async {
@@ -63,6 +92,7 @@ class _MapScreenState extends State<MapScreen> {
       'type': 'dps',
       'comment': comment.isEmpty ? 'Экипаж ДПС (вручную)' : comment,
     });
+    await _loadMarks();
   }
 
   void _showAddDialog(LatLng point) {
@@ -98,7 +128,9 @@ class _MapScreenState extends State<MapScreen> {
   String _formatAge(DateTime createdUtc) {
     final mins = DateTime.now().toUtc().difference(createdUtc).inMinutes;
     if (mins <= 0) return 'только что';
-    return '$mins мин. назад';
+    if (mins < 60) return '$mins мин. назад';
+    final hours = mins ~/ 60;
+    return '$hours ч. назад';
   }
 
   @override
@@ -108,6 +140,11 @@ class _MapScreenState extends State<MapScreen> {
         title: const Text('ДПС: Москва и МО (Авторадар)'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Обновить метки',
+            onPressed: _loadMarks,
+          ),
+          IconButton(
             icon: const Icon(Icons.my_location),
             tooltip: 'Центр Москвы',
             onPressed: () =>
@@ -115,90 +152,76 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ],
       ),
-      body: StreamBuilder(
-        stream: _marksStream,
-        builder: (context, snapshot) {
-          final now = DateTime.now().toUtc();
-          final List rawMarks = (snapshot.data as List?) ?? [];
-
-          final activeMarks = rawMarks.where((m) {
-            final created = DateTime.parse(m['created_at'].toString());
-            return now.difference(created).inMinutes < 120;
-          }).toList();
-
-          return Stack(
+      body: Stack(
+        children: [
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: const LatLng(55.7558, 37.6173),
+              initialZoom: 10.0,
+              minZoom: 8.0,
+              maxZoom: 18.0,
+              cameraConstraint:
+                  CameraConstraint.contain(bounds: _moscowRegionBounds),
+              onLongPress: (_, latLng) => _showAddDialog(latLng),
+            ),
             children: [
-              FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: const LatLng(55.7558, 37.6173),
-                  initialZoom: 10.0,
-                  minZoom: 8.0,
-                  maxZoom: 18.0,
-                  cameraConstraint:
-                      CameraConstraint.contain(bounds: _moscowRegionBounds),
-                  onLongPress: (_, latLng) => _showAddDialog(latLng),
-                ),
-                children: [
-                  TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.dps.msk_radar',
-                  ),
-                  MarkerLayer(
-                    markers: activeMarks.map((mark) {
-                      final created =
-                          DateTime.parse(mark['created_at'].toString());
-                      final isFromChat = mark['source_id'] != null;
-                      return Marker(
-                        point: LatLng(
-                          (mark['lat'] as num).toDouble(),
-                          (mark['lng'] as num).toDouble(),
-                        ),
-                        width: 48,
-                        height: 48,
-                        child: GestureDetector(
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  '${mark['comment'] ?? 'Экипаж ДПС'} (${_formatAge(created)})',
-                                ),
-                                duration: const Duration(seconds: 4),
-                              ),
-                            );
-                          },
-                          child: Icon(
-                            Icons.local_police,
-                            color: isFromChat
-                                ? Colors.amberAccent
-                                : Colors.blueAccent,
-                            size: 38,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.dps.msk_radar',
               ),
-              Positioned(
-                top: 10,
-                left: 10,
-                child: Card(
-                  color: Colors.black87,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
-                    child: Text(
-                      'Активных постов: ${activeMarks.length}',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+              MarkerLayer(
+                markers: _marks.map((mark) {
+                  final created =
+                      DateTime.parse(mark['created_at'].toString());
+                  final isFromChat = mark['source_id'] != null;
+                  return Marker(
+                    point: LatLng(
+                      (mark['lat'] as num).toDouble(),
+                      (mark['lng'] as num).toDouble(),
                     ),
-                  ),
-                ),
+                    width: 48,
+                    height: 48,
+                    child: GestureDetector(
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              '${mark['comment'] ?? 'Экипаж ДПС'} (${_formatAge(created)})',
+                            ),
+                            duration: const Duration(seconds: 4),
+                          ),
+                        );
+                      },
+                      child: Icon(
+                        Icons.local_police,
+                        color: isFromChat
+                            ? Colors.amberAccent
+                            : Colors.blueAccent,
+                        size: 38,
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
             ],
-          );
-        },
+          ),
+          Positioned(
+            top: 10,
+            left: 10,
+            child: Card(
+              color: Colors.black87,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Text(
+                  'Активных постов: ${_marks.length}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddDialog(_mapController.camera.center),
