@@ -5,8 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const String supabaseUrl = 'https://mobpdvfwfwpxbxehlumm.supabase.co';
-const String supabaseAnonKey =
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1vYnBkdmZ3ZndweGJ4ZWhsdW1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUzNTQ3OTksImV4cCI6MjExMDkzMDc5OX0.lakkyjDl2aA9pfu3f8_VX5oFfGlnGs3is5cOkrB9hjM';
+const String supabaseAnonKey = 'sb_publishable_Ru7JMBz4-GVNCyjiTrDrwQ_kkACosiz';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
