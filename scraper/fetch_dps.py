@@ -14,16 +14,21 @@ CHANNELS = [
     "dtp777",
     "moscowmap",
     "msk1_news",
-    "mosgibdd",
-    "dps_msk",
     "moscow_dps",
-    "dps_mo",
-    "mkad_dps",
+    "DtRoad",
+    "transportmos",
+    "moscowach",
+    "mosoblast",
+    "podmoskovye",
+    "gibdd_mo",
+    "avtodormsk",
+    "msk_live",
 ]
 
 KEYWORDS = [
     "дпс", "гибдд", "гаи", "экипаж", "пост", "стоят", "тормозят",
-    "оформляют", "рейд", "засада", "патруль", "проверка", "нюхачи", "перекрыт"
+    "оформляют", "рейд", "засада", "патруль", "проверка", "нюхачи",
+    "перекрыт", "перекрыли", "дтп", "авария", "инспектор"
 ]
 
 LANDMARKS = {
@@ -81,6 +86,11 @@ LANDMARKS = {
     "дмитров": (56.3439, 37.5203),
     "сергиев посад": (56.3153, 38.1359),
     "орехово-зуево": (55.8067, 38.9618),
+    "центральн": (55.7558, 37.6173),
+    "северн": (55.8384, 37.5258),
+    "южн": (55.6228, 37.6781),
+    "западн": (55.7280, 37.4435),
+    "восточн": (55.7877, 37.7756),
 }
 
 
@@ -159,7 +169,7 @@ def fetch_channel(channel):
         if dt_str:
             try:
                 msg_dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-                if (now - msg_dt) > timedelta(hours=6):
+                if (now - msg_dt) > timedelta(hours=24):
                     continue
             except Exception:
                 pass
