@@ -11,7 +11,6 @@ from bs4 import BeautifulSoup
 SUPABASE_URL = "https://mobpdvfwfwpxbxehlumm.supabase.co"
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
 
-# Реально существующие открытые каналы Москвы и Подмосковья
 PUBLIC_CHANNELS = [
     "moscow_dps",
     "dtp777",
@@ -23,29 +22,32 @@ PUBLIC_CHANNELS = [
     "transportmos",
     "DtRoad",
     "msk1_news",
+    "ostorozhno_moskva",
+    "moscow_on_air",
+    "infomoscow24",
+    "dps_msk",
+    "gibdd_msk",
 ]
 
-# Строго слова про посты и экипажи ДПС
 KEYWORDS = [
-    "дпс", "гибдд", "гаи", "экипаж", "пост ", "посты", "стоят", "тормозят",
+    "дпс", "гибдд", "гаи", "экипаж", "пост", "стоят", "тормозят",
     "рейд", "засада", "патруль", "нюхачи", "продувка", "трезвый водитель",
-    "оформляют", "люстра", "мигалки", "машинка", "инспектор", "перекрыли"
+    "оформляют", "люстра", "мигалки", "инспектор", "перекрыли", "перекрыто",
+    "движение перекрыто", "сотрудники", "проверка документов", "дтп"
 ]
 
-# Отсекаем новостной и рекламный спам
 STOP_WORDS = [
-    "подписаться", "прислать новость", "реклама", "erid", "прогноз погоды",
-    "задержали мошенников", "суд приговорил", "строительство метро",
-    "продам", "куплю", "вакансия", "требуются", "розыгрыш", "тариф", "метрополитен"
+    "прогноз погоды", "задержали мошенников", "суд приговорил",
+    "вакансия", "требуются", "розыгрыш", "гороскоп", "курс валют"
 ]
 
 HIGHWAYS_AND_CITIES = {
     "ленинградк": (55.8549, 37.4765),
-    "ленинградское шоссе": (55.8549, 37.4765),
+    "ленинградское": (55.8549, 37.4765),
     "ярославк": (55.8752, 37.7163),
-    "ярославское шоссе": (55.8752, 37.7163),
+    "ярославское": (55.8752, 37.7163),
     "дмитровк": (55.8911, 37.5453),
-    "дмитровское шоссе": (55.8911, 37.5453),
+    "дмитровское": (55.8911, 37.5453),
     "алтуфьев": (55.8986, 37.5872),
     "щёлков": (55.8105, 37.8012),
     "щелков": (55.8105, 37.8012),
@@ -71,6 +73,12 @@ HIGHWAYS_AND_CITIES = {
     "звенигородск": (55.7719, 37.5153),
     "хорошёв": (55.7764, 37.5186),
     "хорошев": (55.7764, 37.5186),
+    "тверск": (55.7650, 37.6050),
+    "садовое": (55.7730, 37.6200),
+    "бульварное": (55.7600, 37.6000),
+    "мсд": (55.8000, 37.7400),
+    "свх": (55.8200, 37.7200),
+    "ювх": (55.6800, 37.7200),
     "химки": (55.8887, 37.4304),
     "мытищи": (55.9105, 37.7363),
     "королёв": (55.9222, 37.8546),
@@ -140,8 +148,8 @@ HIGHWAYS_AND_CITIES = {
 
 def extract_location_phrase(text):
     patterns = [
-        r"(?:мкад|ттк|цкад)\s*\d+\s*(?:км|километр)?",
-        r"\d+\s*(?:км|километр)\s*(?:мкад|ттк|цкад|[а-яё\-]+\s+шоссе)",
+        r"(?:мкад|ттк|цкад)\s*\d+(?:-й|\s*й)?\s*(?:км|километр)?",
+        r"\d+(?:-й|\s*й)?\s*(?:км|километр)\s*(?:мкад|ттк|цкад|[а-яё\-]+\s+шоссе)",
         r"(?:ул\.|улица|пр-т|проспект|ш\.|шоссе|б-р|бульвар|пер\.|переулок|наб\.|набережная|пл\.|площадь)\s+[А-ЯЁа-яё0-9\-]+(?:\s+[А-ЯЁа-яё0-9\-]+)?",
         r"[А-ЯЁ][а-яё\-]+\s+(?:улица|проспект|шоссе|бульвар|переулок|набережная|вал|проезд)",
         r"(?:м\.|метро)\s+[А-ЯЁа-яё\-]+(?:\s+[А-ЯЁа-яё\-]+)?",
@@ -158,7 +166,7 @@ def geocode_address(text):
     if loc_phrase:
         query = urllib.parse.quote(f"Москва и Московская область, {loc_phrase}")
         url = f"https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1&viewbox=35.1,56.9,40.2,54.2&bounded=1"
-        req = urllib.request.Request(url, headers={"User-Agent": "DpsMskRadarBot/2.2"})
+        req = urllib.request.Request(url, headers={"User-Agent": "DpsMskRadarBot/2.3"})
         try:
             with urllib.request.urlopen(req, timeout=8) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
@@ -215,12 +223,14 @@ def fetch_public_channels():
         try:
             with urllib.request.urlopen(req, timeout=12) as resp:
                 html = resp.read().decode("utf-8", errors="ignore")
-        except Exception as e:
-            print(f"Канал @{channel} недоступен: {e}")
+        except Exception:
             continue
 
         soup = BeautifulSoup(html, "html.parser")
         messages = soup.find_all("div", class_="tgme_widget_message")
+        if not messages:
+            continue
+
         print(f"Канал @{channel}: сообщений = {len(messages)}")
 
         for msg in messages[-25:]:
@@ -235,7 +245,7 @@ def fetch_public_channels():
             if dt_str:
                 try:
                     msg_dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-                    if (now - msg_dt) > timedelta(hours=12):
+                    if (now - msg_dt) > timedelta(hours=24):
                         continue
                 except Exception:
                     pass
@@ -243,7 +253,7 @@ def fetch_public_channels():
             text = text_div.get_text(" ", strip=True)
             lower_text = text.lower()
 
-            if len(text) > 400 or any(sw in lower_text for sw in STOP_WORDS):
+            if len(text) > 1200 or any(sw in lower_text for sw in STOP_WORDS):
                 continue
 
             if not any(kw in lower_text for kw in KEYWORDS):
