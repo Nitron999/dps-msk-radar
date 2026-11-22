@@ -61,7 +61,7 @@ class _MapScreenState extends State<MapScreen> {
       'lat': point.latitude,
       'lng': point.longitude,
       'type': 'dps',
-      'comment': comment.isEmpty ? 'Экипаж ДПС' : comment,
+      'comment': comment.isEmpty ? 'Экипаж ДПС (вручную)' : comment,
     });
   }
 
@@ -95,11 +95,17 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  String _formatAge(DateTime createdUtc) {
+    final mins = DateTime.now().toUtc().difference(createdUtc).inMinutes;
+    if (mins <= 0) return 'только что';
+    return '$mins мин. назад';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ДПС: Москва и МО'),
+        title: const Text('ДПС: Москва и МО (Авторадар)'),
         actions: [
           IconButton(
             icon: const Icon(Icons.my_location),
@@ -117,51 +123,77 @@ class _MapScreenState extends State<MapScreen> {
 
           final activeMarks = rawMarks.where((m) {
             final created = DateTime.parse(m['created_at']);
-            return now.difference(created).inMinutes < 60;
+            return now.difference(created).inMinutes < 120;
           }).toList();
 
-          return FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: const LatLng(55.7558, 37.6173),
-              initialZoom: 10.0,
-              minZoom: 8.0,
-              maxZoom: 18.0,
-              cameraConstraint:
-                  CameraConstraint.contain(bounds: _moscowRegionBounds),
-              onLongPress: (_, latLng) => _showAddDialog(latLng),
-            ),
+          return Stack(
             children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.dps.msk_radar',
-              ),
-              MarkerLayer(
-                markers: activeMarks.map((mark) {
-                  return Marker(
-                    point: LatLng(
-                      (mark['lat'] as num).toDouble(),
-                      (mark['lng'] as num).toDouble(),
-                    ),
-                    width: 48,
-                    height: 48,
-                    child: GestureDetector(
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(mark['comment'] ?? 'Экипаж ДПС'),
-                            duration: const Duration(seconds: 3),
+              FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: const LatLng(55.7558, 37.6173),
+                  initialZoom: 10.0,
+                  minZoom: 8.0,
+                  maxZoom: 18.0,
+                  cameraConstraint:
+                      CameraConstraint.contain(bounds: _moscowRegionBounds),
+                  onLongPress: (_, latLng) => _showAddDialog(latLng),
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.dps.msk_radar',
+                  ),
+                  MarkerLayer(
+                    markers: activeMarks.map((mark) {
+                      final created = DateTime.parse(mark['created_at']);
+                      final isFromChat = mark['source_id'] != null;
+                      return Marker(
+                        point: LatLng(
+                          (mark['lat'] as num).toDouble(),
+                          (mark['lng'] as num).toDouble(),
+                        ),
+                        width: 48,
+                        height: 48,
+                        child: GestureDetector(
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '${mark['comment'] ?? 'Экипаж ДПС'} (${_formatAge(created)})',
+                                ),
+                                duration: const Duration(seconds: 4),
+                              ),
+                            );
+                          },
+                          child: Icon(
+                            Icons.local_police,
+                            color: isFromChat
+                                ? Colors.amberAccent
+                                : Colors.blueAccent,
+                            size: 38,
                           ),
-                        );
-                      },
-                      child: const Icon(
-                        Icons.local_police,
-                        color: Colors.blueAccent,
-                        size: 38,
-                      ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+              Positioned(
+                top: 10,
+                left: 10,
+                child: Card(
+                  color: Colors.black87,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    child: Text(
+                      'Активных постов: ${activeMarks.length}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                  );
-                }).toList(),
+                  ),
+                ),
               ),
             ],
           );
@@ -170,7 +202,7 @@ class _MapScreenState extends State<MapScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddDialog(_mapController.camera.center),
         icon: const Icon(Icons.add_location_alt),
-        label: const Text('Поставить метку ДПС'),
+        label: const Text('Поставить метку'),
       ),
     );
   }
