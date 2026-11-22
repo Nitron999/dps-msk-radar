@@ -45,7 +45,7 @@ class _MapScreenState extends State<MapScreen> {
     const LatLng(56.9, 40.2),
   );
 
-  late final Stream<List>> _marksStream;
+  late final SupabaseStreamBuilder _marksStream;
 
   @override
   void initState() {
@@ -115,14 +115,14 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<List>>(
+      body: StreamBuilder(
         stream: _marksStream,
         builder: (context, snapshot) {
           final now = DateTime.now().toUtc();
-          final rawMarks = snapshot.data ?? [];
+          final List rawMarks = (snapshot.data as List?) ?? [];
 
           final activeMarks = rawMarks.where((m) {
-            final created = DateTime.parse(m['created_at']);
+            final created = DateTime.parse(m['created_at'].toString());
             return now.difference(created).inMinutes < 120;
           }).toList();
 
@@ -147,7 +147,8 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                   MarkerLayer(
                     markers: activeMarks.map((mark) {
-                      final created = DateTime.parse(mark['created_at']);
+                      final created =
+                          DateTime.parse(mark['created_at'].toString());
                       final isFromChat = mark['source_id'] != null;
                       return Marker(
                         point: LatLng(
