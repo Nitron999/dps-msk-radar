@@ -1,15 +1,22 @@
 import os
 import re
 import time
+import asyncio
 import urllib.parse
 import urllib.request
 import urllib.error
 import json
 from datetime import datetime, timezone, timedelta
 from bs4 import BeautifulSoup
+from telethon import TelegramClient
+from telethon.sessions import StringSession
 
 SUPABASE_URL = "https://mobpdvfwfwpxbxehlumm.supabase.co"
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
+
+TG_API_ID = os.environ.get("TG_API_ID", "").strip()
+TG_API_HASH = os.environ.get("TG_API_HASH", "").strip()
+TG_SESSION = os.environ.get("TG_SESSION", "").strip()
 
 PUBLIC_CHANNELS = [
     "moscow_dps",
@@ -19,11 +26,21 @@ PUBLIC_CHANNELS = [
     "transportmos",
 ]
 
-# Только целые слова про экипажи и рейды ДПС (не сработает на "поставщик" и т.п.)
-DPS_REGEX = re.compile(
-    r"\b(дпс|гибдд|гаи|экипаж\w*|пост|посты|постов|рейд\w*|засад\w*|патрул\w*|нюхач\w*|продувк\w*|инспектор\w*|люстр\w*)\b",
+# Фильтр названий чатов на аккаунте, которые парсер читает автоматически
+CHAT_TITLE_FILTER = re.compile(
+    r"(дпс|гибдд|гаи|мкад|дтп|радар|авточат|дорог)",
     flags=re.IGNORECASE,
 )
+
+# Только целые слова про экипажи и посты
+DPS_REGEX = re.compile(
+    r"\b(дпс|гибдд|гаи|экипаж\w*|пост|посты|постов|рейд\w*|засад\w*|патрул\w*|нюхач\w*|продувк\w*|инспектор\w*|люстр\w*|стоят|тормозят|оформляют)\b",
+    flags=re.IGNORECASE,
+)
+
+STOP_WORDS = [
+    "реклама", "erid", "продам", "куплю", "вакансия", "требуются", "розыгрыш", "подписаться"
+]
 
 HIGHWAYS_AND_CITIES = {
     "ленинградк": (55.8549, 37.4765),
@@ -88,6 +105,39 @@ HIGHWAYS_AND_CITIES = {
     "реутов": (55.7622, 37.8567),
     "долгопрудный": (55.9397, 37.5142),
     "лобня": (56.0125, 37.4753),
+    "бутово": (55.5436, 37.5419),
+    "митино": (55.8458, 37.3619),
+    "строгино": (55.8039, 37.4028),
+    "марьино": (55.6500, 37.7444),
+    "выхино": (55.7156, 37.8181),
+    "перово": (55.7508, 37.7844),
+    "отрадное": (55.8639, 37.6047),
+    "медведково": (55.8878, 37.6611),
+    "солнцево": (55.6478, 37.3944),
+    "новокосино": (55.7450, 37.8639),
+    "жулебино": (55.6856, 37.8561),
+    "чертаново": (55.6361, 37.6061),
+    "царицыно": (55.6200, 37.6694),
+    "люблино": (55.6758, 37.7619),
+    "кузьминки": (55.7056, 37.7658),
+    "текстильщики": (55.7092, 37.7322),
+    "печатники": (55.6931, 37.7281),
+    "коломенск": (55.6783, 37.6639),
+    "нагатин": (55.6836, 37.6225),
+    "тушино": (55.8333, 37.4389),
+    "войковск": (55.8189, 37.4981),
+    "сокол": (55.8053, 37.5150),
+    "динамо": (55.7897, 37.5581),
+    "беляево": (55.6428, 37.5258),
+    "коньково": (55.6333, 37.5189),
+    "ясенево": (55.6061, 37.5333),
+    "тёплый стан": (55.6189, 37.5081),
+    "теплый стан": (55.6189, 37.5081),
+    "бирюлёво": (55.5881, 37.6542),
+    "бирюлево": (55.5881, 37.6542),
+    "орехово": (55.6131, 37.6947),
+    "братеево": (55.6322, 37.7519),
+    "капотня": (55.6389, 37.7981),
 }
 
 
@@ -111,7 +161,7 @@ def geocode_address(text):
     if loc_phrase:
         query = urllib.parse.quote(f"Москва и Московская область, {loc_phrase}")
         url = f"https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1&viewbox=35.1,56.9,40.2,54.2&bounded=1"
-        req = urllib.request.Request(url, headers={"User-Agent": "DpsMskRadarBot/3.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "DpsMskRadarBot/4.0"})
         try:
             with urllib.request.urlopen(req, timeout=8) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
@@ -160,47 +210,4 @@ def send_to_supabase(lat, lng, comment, source_id):
         print(f"ОШИБКА ЗАПИСИ [{source_id}]: {e}")
 
 
-def fetch_public_channels():
-    now = datetime.now(timezone.utc)
-    for channel in PUBLIC_CHANNELS:
-        url = f"https://t.me/s/{channel}"
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        try:
-            with urllib.request.urlopen(req, timeout=12) as resp:
-                html = resp.read().decode("utf-8", errors="ignore")
-        except Exception:
-            continue
-
-        soup = BeautifulSoup(html, "html.parser")
-        messages = soup.find_all("div", class_="tgme_widget_message")
-        print(f"Канал @{channel}: сообщений = {len(messages)}")
-
-        for msg in messages[-25:]:
-            post_id = msg.get("data-post")
-            text_div = msg.find("div", class_="tgme_widget_message_text")
-            time_tag = msg.find("time")
-
-            if not post_id or not text_div or not time_tag:
-                continue
-
-            dt_str = time_tag.get("datetime")
-            if dt_str:
-                try:
-                    msg_dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-                    if (now - msg_dt) > timedelta(hours=24):
-                        continue
-                except Exception:
-                    pass
-
-            text = text_div.get_text(" ", strip=True)
-            if not DPS_REGEX.search(text):
-                continue
-
-            coords = geocode_address(text)
-            if coords:
-                send_to_supabase(coords[0], coords[1], f"[{channel}] {text}", post_id)
-                time.sleep(1.1)
-
-
-if __name__ == "__main__":
-    fetch_public_channels()
+def process_text(source_name, post_
