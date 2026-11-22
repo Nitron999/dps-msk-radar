@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 from bs4 import BeautifulSoup
 
 SUPABASE_URL = "https://mobpdvfwfwpxbxehlumm.supabase.co"
-SUPABASE_KEY = "sb_publishable_Ru7JMBz4-GVNCyjiTrDrwQ_kkACosiz"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1vYnBkdmZ3ZndweGJ4ZWhsdW1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUzNTQ3OTksImV4cCI6MjExMDkzMDc5OX0.lakkyjDl2aA9pfu3f8_VX5oFfGlnGs3is5cOkrB9hjM"
 
 CHANNELS = [
     "dtp777",
@@ -128,6 +128,7 @@ def send_to_supabase(lat, lng, comment, source_id):
 
     headers = {
         "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
         "Content-Type": "application/json",
         "Prefer": "resolution=ignore-duplicates",
     }
