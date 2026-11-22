@@ -26,13 +26,11 @@ PUBLIC_CHANNELS = [
     "transportmos",
 ]
 
-# Фильтр названий чатов на аккаунте, которые парсер читает автоматически
 CHAT_TITLE_FILTER = re.compile(
     r"(дпс|гибдд|гаи|мкад|дтп|радар|авточат|дорог)",
     flags=re.IGNORECASE,
 )
 
-# Только целые слова про экипажи и посты
 DPS_REGEX = re.compile(
     r"\b(дпс|гибдд|гаи|экипаж\w*|пост|посты|постов|рейд\w*|засад\w*|патрул\w*|нюхач\w*|продувк\w*|инспектор\w*|люстр\w*|стоят|тормозят|оформляют)\b",
     flags=re.IGNORECASE,
@@ -210,4 +208,75 @@ def send_to_supabase(lat, lng, comment, source_id):
         print(f"ОШИБКА ЗАПИСИ [{source_id}]: {e}")
 
 
-def process_text(source_name, post_
+def process_text(source_name, post_id, text):
+    lower_text = text.lower()
+    if any(sw in lower_text for sw in STOP_WORDS):
+        return
+    if not DPS_REGEX.search(text):
+        return
+    coords = geocode_address(text)
+    if coords:
+        send_to_supabase(coords[0], coords[1], f"[{source_name}] {text}", post_id)
+        time.sleep(1.1)
+
+
+def fetch_public_channels():
+    now = datetime.now(timezone.utc)
+    for channel in PUBLIC_CHANNELS:
+        url = f"https://t.me/s/{channel}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                html = resp.read().decode("utf-8", errors="ignore")
+        except Exception:
+            continue
+
+        soup = BeautifulSoup(html, "html.parser")
+        messages = soup.find_all("div", class_="tgme_widget_message")
+        for msg in messages[-20:]:
+            post_id = msg.get("data-post")
+            text_div = msg.find("div", class_="tgme_widget_message_text")
+            time_tag = msg.find("time")
+            if not post_id or not text_div or not time_tag:
+                continue
+
+            dt_str = time_tag.get("datetime")
+            if dt_str:
+                try:
+                    msg_dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+                    if (now - msg_dt) > timedelta(hours=12):
+                        continue
+                except Exception:
+                    pass
+
+            process_text(channel, post_id, text_div.get_text(" ", strip=True))
+
+
+async def fetch_live_chats():
+    if not (TG_API_ID and TG_API_HASH and TG_SESSION):
+        print("Живые чаты пропущены: не добавлены TG_API_ID / TG_API_HASH / TG_SESSION")
+        return
+
+    now = datetime.now(timezone.utc)
+    async with TelegramClient(StringSession(TG_SESSION), int(TG_API_ID), TG_API_HASH) as client:
+        async for dialog in client.iter_dialogs():
+            if not (dialog.is_group or dialog.is_channel):
+                continue
+            title = dialog.title or ""
+            if not CHAT_TITLE_FILTER.search(title):
+                continue
+
+            count = 0
+            async for msg in client.iter_messages(dialog.entity, limit=50):
+                if not msg.text or not msg.date:
+                    continue
+                if (now - msg.date) > timedelta(hours=6):
+                    break
+                count += 1
+                process_text(title[:25], f"tg_{dialog.id}_{msg.id}", msg.text.strip())
+            print(f"Чат «{title}»: проверено свежих сообщений = {count}")
+
+
+if __name__ == "__main__":
+    fetch_public_channels()
+    asyncio.run(fetch_live_chats())
