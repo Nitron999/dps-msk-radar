@@ -10,7 +10,6 @@ from bs4 import BeautifulSoup
 SUPABASE_URL = "https://mobpdvfwfwpxbxehlumm.supabase.co"
 SUPABASE_KEY = "sb_publishable_Ru7JMBz4-GVNCyjiTrDrwQ_kkACosiz"
 
-# Впиши сюда реальные публичные @username Telegram-каналов по Москве и МО (без символа @)
 CHANNELS = [
     "dtp777",
     "moscowmap",
