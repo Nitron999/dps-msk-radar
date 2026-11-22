@@ -3,12 +3,13 @@ import re
 import time
 import urllib.parse
 import urllib.request
+import urllib.error
 import json
 from datetime import datetime, timezone, timedelta
 from bs4 import BeautifulSoup
 
 SUPABASE_URL = "https://mobpdvfwfwpxbxehlumm.supabase.co"
-SUPABASE_KEY = "sb_secret_JPuwhASXPKdCUhIpdlLePw_5L36-edv"
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
 
 CHANNELS = [
     "dtp777",
@@ -117,6 +118,10 @@ def geocode_address(text):
 
 
 def send_to_supabase(lat, lng, comment, source_id):
+    if not SUPABASE_KEY:
+        print("ОШИБКА: Переменная SUPABASE_KEY пуста!")
+        return
+
     url = f"{SUPABASE_URL}/rest/v1/patrol_marks?on_conflict=source_id"
     payload = json.dumps({
         "lat": lat,
@@ -135,6 +140,9 @@ def send_to_supabase(lat, lng, comment, source_id):
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             print(f"УСПЕХ [{source_id}]: {comment[:70]}")
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="ignore")
+        print(f"ОШИБКА ЗАПИСИ [{source_id}]: HTTP {e.code} - {err_body}")
     except Exception as e:
         print(f"ОШИБКА ЗАПИСИ [{source_id}]: {e}")
 
