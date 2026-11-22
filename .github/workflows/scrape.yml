@@ -14,4 +14,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install beautifulsoup4
-      - run: python scraper/fetch_dps.py
+      - name: Run scraper
+        env:
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scraper/fetch_dps.py
