@@ -10,20 +10,21 @@ from bs4 import BeautifulSoup
 SUPABASE_URL = "https://mobpdvfwfwpxbxehlumm.supabase.co"
 SUPABASE_KEY = "sb_publishable_Ru7JMBz4-GVNCyjiTrDrwQ_kkACosiz"
 
+# Впиши сюда реальные публичные @username Telegram-каналов по Москве и МО (без символа @)
 CHANNELS = [
-    "dps_msk",
     "dtp777",
+    "moscowmap",
+    "msk1_news",
+    "mosgibdd",
+    "dps_msk",
     "moscow_dps",
-    "gibdd_msk_mo",
     "dps_mo",
     "mkad_dps",
-    "mosoblast_dps",
-    "avto_msk_chat",
 ]
 
 KEYWORDS = [
     "дпс", "гибдд", "гаи", "экипаж", "пост", "стоят", "тормозят",
-    "оформляют", "рейд", "засада", "патруль", "проверка", "нюхачи"
+    "оформляют", "рейд", "засада", "патруль", "проверка", "нюхачи", "перекрыт"
 ]
 
 LANDMARKS = {
@@ -127,9 +128,9 @@ def send_to_supabase(lat, lng, comment, source_id):
     req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            print(f"Добавлено [{source_id}]: {comment[:60]}")
+            print(f"УСПЕХ [{source_id}]: {comment[:70]}")
     except Exception as e:
-        print(f"Ошибка записи [{source_id}]: {e}")
+        print(f"ОШИБКА ЗАПИСИ [{source_id}]: {e}")
 
 
 def fetch_channel(channel):
@@ -139,14 +140,15 @@ def fetch_channel(channel):
         with urllib.request.urlopen(req, timeout=12) as resp:
             html = resp.read().decode("utf-8", errors="ignore")
     except Exception as e:
-        print(f"Канал {channel} недоступен: {e}")
+        print(f"Канал @{channel} недоступен: {e}")
         return
 
     soup = BeautifulSoup(html, "html.parser")
     messages = soup.find_all("div", class_="tgme_widget_message")
+    print(f"Канал @{channel}: найдено сообщений на странице = {len(messages)}")
     now = datetime.now(timezone.utc)
 
-    for msg in messages[-15:]:
+    for msg in messages[-20:]:
         post_id = msg.get("data-post")
         text_div = msg.find("div", class_="tgme_widget_message_text")
         time_tag = msg.find("time")
@@ -158,7 +160,7 @@ def fetch_channel(channel):
         if dt_str:
             try:
                 msg_dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-                if (now - msg_dt) > timedelta(hours=2):
+                if (now - msg_dt) > timedelta(hours=6):
                     continue
             except Exception:
                 pass
