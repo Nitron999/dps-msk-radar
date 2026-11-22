@@ -11,35 +11,63 @@ from bs4 import BeautifulSoup
 SUPABASE_URL = "https://mobpdvfwfwpxbxehlumm.supabase.co"
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
 
-CHANNELS = [
+# 28 открытых ДПС-каналов и дорожных сводок Москвы и Подмосковья (без сессий и авторизации)
+PUBLIC_CHANNELS = [
+    # Общие по Москве и МКАД
+    "moscow_dps",
+    "dps_msk",
+    "gibdd_msk",
+    "gai_msk",
+    "dps_moscow_mo",
+    "dps_mkad",
     "dtp777",
     "moscowmap",
-    "msk1_news",
-    "moscow_dps",
-    "DtRoad",
-    "transportmos",
-    "moscowach",
-    "mosoblast",
-    "podmoskovye",
-    "msk_live",
+    # Округа Москвы
+    "dps_uao",
+    "dps_uzao",
+    "dps_zao",
+    "dps_szao",
+    "dps_sao",
+    "dps_svao",
+    "dps_vao",
+    "dps_uvao",
+    # Подмосковье и вылетные трассы
+    "dps_mo",
+    "dps_podmoskovye",
+    "dps_khimki",
+    "dps_mytishchi",
+    "dps_balashikha",
+    "dps_lyubertsy",
+    "dps_podolsk",
+    "dps_odintsovo",
+    "dps_krasnogorsk",
+    "dps_domodedovo",
+    "dps_zelenograd",
+    "dps_pushkino",
 ]
 
+# Только реальные сообщения про экипажи, рейды и посты
 KEYWORDS = [
     "дпс", "гибдд", "гаи", "экипаж", "пост", "стоят", "тормозят",
-    "оформляют", "рейд", "засада", "патруль", "проверка", "нюхачи",
-    "перекрыт", "перекрыли", "дтп", "авария", "инспектор"
+    "рейд", "засада", "патруль", "нюхачи", "продувка", "трезвый водитель",
+    "оформляют", "люстра", "мигалки", "машинка", "работают", "перекрыли"
 ]
 
-LANDMARKS = {
-    "мкад": (55.7558, 37.6173),
-    "ттк": (55.7558, 37.6173),
-    "садовое": (55.7558, 37.6173),
+# Фильтр от рекламы и длинных новостей
+STOP_WORDS = [
+    "подписаться", "прислать новость", "реклама", "erid", "прогноз погоды",
+    "задержали мошенников", "суд приговорил", "строительство метро",
+    "продам", "куплю", "вакансия", "требуются", "розыгрыш"
+]
+
+# Привязка к конкретным шоссе, округам и городам МО (если в тексте нет номера дома/улицы)
+HIGHWAYS_AND_CITIES = {
     "ленинградк": (55.8549, 37.4765),
-    "ленинградское": (55.8549, 37.4765),
+    "ленинградское шоссе": (55.8549, 37.4765),
     "ярославк": (55.8752, 37.7163),
-    "ярославское": (55.8752, 37.7163),
+    "ярославское шоссе": (55.8752, 37.7163),
     "дмитровк": (55.8911, 37.5453),
-    "дмитровское": (55.8911, 37.5453),
+    "дмитровское шоссе": (55.8911, 37.5453),
     "алтуфьев": (55.8986, 37.5872),
     "щёлков": (55.8105, 37.8012),
     "щелков": (55.8105, 37.8012),
@@ -58,6 +86,13 @@ LANDMARKS = {
     "новорижск": (55.7925, 37.3519),
     "волоколамск": (55.8294, 37.4286),
     "пятницк": (55.8647, 37.3592),
+    "кутузовск": (55.7361, 37.5169),
+    "ленинск": (55.6811, 37.5422),
+    "профсоюзн": (55.6569, 37.5358),
+    "мичуринск": (55.6947, 37.4936),
+    "звенигородск": (55.7719, 37.5153),
+    "хорошёв": (55.7764, 37.5186),
+    "хорошев": (55.7764, 37.5186),
     "химки": (55.8887, 37.4304),
     "мытищи": (55.9105, 37.7363),
     "королёв": (55.9222, 37.8546),
@@ -85,33 +120,80 @@ LANDMARKS = {
     "дмитров": (56.3439, 37.5203),
     "сергиев посад": (56.3153, 38.1359),
     "орехово-зуево": (55.8067, 38.9618),
-    "центральн": (55.7558, 37.6173),
-    "северн": (55.8384, 37.5258),
-    "южн": (55.6228, 37.6781),
-    "западн": (55.7280, 37.4435),
-    "восточн": (55.7877, 37.7756),
+    "видное": (55.5542, 37.7089),
+    "реутов": (55.7622, 37.8567),
+    "долгопрудный": (55.9397, 37.5142),
+    "лобня": (56.0125, 37.4753),
+    "бутово": (55.5436, 37.5419),
+    "митино": (55.8458, 37.3619),
+    "строгино": (55.8039, 37.4028),
+    "марьино": (55.6500, 37.7444),
+    "выхино": (55.7156, 37.8181),
+    "перово": (55.7508, 37.7844),
+    "отрадное": (55.8639, 37.6047),
+    "медведково": (55.8878, 37.6611),
+    "солнцево": (55.6478, 37.3944),
+    "новокосино": (55.7450, 37.8639),
+    "жулебино": (55.6856, 37.8561),
+    "чертаново": (55.6361, 37.6061),
+    "царицыно": (55.6200, 37.6694),
+    "люблино": (55.6758, 37.7619),
+    "кузьминки": (55.7056, 37.7658),
+    "текстильщики": (55.7092, 37.7322),
+    "печатники": (55.6931, 37.7281),
+    "коломенск": (55.6783, 37.6639),
+    "нагатин": (55.6836, 37.6225),
+    "тушино": (55.8333, 37.4389),
+    "войковск": (55.8189, 37.4981),
+    "сокол": (55.8053, 37.5150),
+    "динамо": (55.7897, 37.5581),
+    "беляево": (55.6428, 37.5258),
+    "коньково": (55.6333, 37.5189),
+    "ясенево": (55.6061, 37.5333),
+    "тёплый стан": (55.6189, 37.5081),
+    "теплый стан": (55.6189, 37.5081),
+    "бирюлёво": (55.5881, 37.6542),
+    "бирюлево": (55.5881, 37.6542),
+    "орехово": (55.6131, 37.6947),
+    "братеево": (55.6322, 37.7519),
+    "капотня": (55.6389, 37.7981),
 }
 
 
+def extract_location_phrase(text):
+    patterns = [
+        r"(?:мкад|ттк|цкад)\s*\d+\s*(?:км|километр)?",
+        r"\d+\s*(?:км|километр)\s*(?:мкад|ттк|цкад|[а-яё\-]+\s+шоссе)",
+        r"(?:ул\.|улица|пр-т|проспект|ш\.|шоссе|б-р|бульвар|пер\.|переулок|наб\.|набережная|пл\.|площадь)\s+[А-ЯЁа-яё0-9\-]+(?:\s+[А-ЯЁа-яё0-9\-]+)?",
+        r"[А-ЯЁ][а-яё\-]+\s+(?:улица|проспект|шоссе|бульвар|переулок|набережная|вал|проезд)",
+        r"(?:м\.|метро)\s+[А-ЯЁа-яё\-]+(?:\s+[А-ЯЁа-яё\-]+)?",
+    ]
+    for pat in patterns:
+        m = re.search(pat, text, flags=re.IGNORECASE)
+        if m:
+            return m.group(0).strip()
+    return None
+
+
 def geocode_address(text):
-    clean = re.sub(r"http\S+|@\w+|#\w+", "", text)
-    clean = re.sub(r"[^\w\s\-,.]", " ", clean).strip()
-    query = urllib.parse.quote(f"Москва и Московская область, {clean[:120]}")
-    url = f"https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1&viewbox=35.1,56.9,40.2,54.2&bounded=1"
-    req = urllib.request.Request(url, headers={"User-Agent": "DpsMskRadarBot/1.0"})
-    try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            if data:
-                lat = float(data[0]["lat"])
-                lng = float(data[0]["lon"])
-                if 54.2 <= lat <= 56.9 and 35.1 <= lng <= 40.2:
-                    return lat, lng
-    except Exception:
-        pass
+    loc_phrase = extract_location_phrase(text)
+    if loc_phrase:
+        query = urllib.parse.quote(f"Москва и Московская область, {loc_phrase}")
+        url = f"https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1&viewbox=35.1,56.9,40.2,54.2&bounded=1"
+        req = urllib.request.Request(url, headers={"User-Agent": "DpsMskRadarBot/2.1"})
+        try:
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if data:
+                    lat = float(data[0]["lat"])
+                    lng = float(data[0]["lon"])
+                    if 54.2 <= lat <= 56.9 and 35.1 <= lng <= 40.2:
+                        return lat, lng
+        except Exception:
+            pass
 
     lower = text.lower()
-    for key, coords in LANDMARKS.items():
+    for key, coords in HIGHWAYS_AND_CITIES.items():
         if key in lower:
             return coords
     return None
@@ -139,7 +221,7 @@ def send_to_supabase(lat, lng, comment, source_id):
     req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            print(f"УСПЕХ [{source_id}]: {comment[:70]}")
+            print(f"УСПЕХ [{source_id}]: {comment[:80]}")
     except urllib.error.HTTPError as e:
         err_body = e.read().decode("utf-8", errors="ignore")
         print(f"ОШИБКА ЗАПИСИ [{source_id}]: HTTP {e.code} - {err_body}")
@@ -147,50 +229,55 @@ def send_to_supabase(lat, lng, comment, source_id):
         print(f"ОШИБКА ЗАПИСИ [{source_id}]: {e}")
 
 
-def fetch_channel(channel):
-    url = f"https://t.me/s/{channel}"
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    try:
-        with urllib.request.urlopen(req, timeout=12) as resp:
-            html = resp.read().decode("utf-8", errors="ignore")
-    except Exception as e:
-        print(f"Канал @{channel} недоступен: {e}")
-        return
-
-    soup = BeautifulSoup(html, "html.parser")
-    messages = soup.find_all("div", class_="tgme_widget_message")
-    print(f"Канал @{channel}: найдено сообщений на странице = {len(messages)}")
+def fetch_public_channels():
     now = datetime.now(timezone.utc)
-
-    for msg in messages[-20:]:
-        post_id = msg.get("data-post")
-        text_div = msg.find("div", class_="tgme_widget_message_text")
-        time_tag = msg.find("time")
-
-        if not post_id or not text_div or not time_tag:
+    for channel in PUBLIC_CHANNELS:
+        url = f"https://t.me/s/{channel}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                html = resp.read().decode("utf-8", errors="ignore")
+        except Exception:
             continue
 
-        dt_str = time_tag.get("datetime")
-        if dt_str:
-            try:
-                msg_dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-                if (now - msg_dt) > timedelta(hours=24):
-                    continue
-            except Exception:
-                pass
-
-        text = text_div.get_text(" ", strip=True)
-        lower_text = text.lower()
-
-        if not any(kw in lower_text for kw in KEYWORDS):
+        soup = BeautifulSoup(html, "html.parser")
+        messages = soup.find_all("div", class_="tgme_widget_message")
+        if not messages:
             continue
 
-        coords = geocode_address(text)
-        if coords:
-            send_to_supabase(coords[0], coords[1], f"[{channel}] {text}", post_id)
-            time.sleep(1.1)
+        print(f"Канал @{channel}: сообщений = {len(messages)}")
+
+        for msg in messages[-25:]:
+            post_id = msg.get("data-post")
+            text_div = msg.find("div", class_="tgme_widget_message_text")
+            time_tag = msg.find("time")
+
+            if not post_id or not text_div or not time_tag:
+                continue
+
+            dt_str = time_tag.get("datetime")
+            if dt_str:
+                try:
+                    msg_dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+                    if (now - msg_dt) > timedelta(hours=6):
+                        continue
+                except Exception:
+                    pass
+
+            text = text_div.get_text(" ", strip=True)
+            lower_text = text.lower()
+
+            if len(text) > 350 or any(sw in lower_text for sw in STOP_WORDS):
+                continue
+
+            if not any(kw in lower_text for kw in KEYWORDS):
+                continue
+
+            coords = geocode_address(text)
+            if coords:
+                send_to_supabase(coords[0], coords[1], f"[{channel}] {text}", post_id)
+                time.sleep(1.1)
 
 
 if __name__ == "__main__":
-    for ch in CHANNELS:
-        fetch_channel(ch)
+    fetch_public_channels()
